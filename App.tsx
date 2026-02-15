@@ -40,7 +40,9 @@ const App: React.FC = () => {
 
   const initializePopulation = useCallback(() => {
     const newPop: Individual[] = Array.from({ length: 20 }).map((_, i) => {
-      const alleles: [Allele, Allele] = Math.random() > 0.5 ? ['G', 'G'] : ['B', 'B'];
+      const a1: Allele = Math.random() > 0.5 ? 'G' : 'B';
+      const a2: Allele = Math.random() > 0.5 ? 'G' : 'B';
+      const alleles: [Allele, Allele] = [a1, a2];
       return {
         id: `gen${Date.now()}-${i}`,
         alleles,
@@ -68,7 +70,7 @@ const App: React.FC = () => {
 
     switch (step) {
       case GameStep.VARIATION:
-        addLog("תצפית: השונות קיימת מראש באוכלוסייה (לפני המוטציות והשינוי הסביבתי).");
+        addLog("תצפית: השונות הגנטית קיימת מראש. שים לב לצבעים השונים.");
         nextStep();
         break;
 
@@ -87,19 +89,19 @@ const App: React.FC = () => {
         });
         setPopulation(mutatedPop);
         updateStats(mutatedPop);
-        addLog(`שכפול DNA: התרחשו ${mCount} מוטציות אקראיות ללא קשר לסביבה.`);
+        addLog(`שכפול DNA: התרחשו ${mCount} מוטציות אקראיות.`);
         nextStep();
         break;
 
       case GameStep.ENV_CHANGE:
         const nextIdx = (ENVIRONMENTS.indexOf(environment) + 1) % ENVIRONMENTS.length;
         setEnvironment(ENVIRONMENTS[nextIdx]);
-        addLog(`שינוי סביבתי: הסביבה השתנתה ל${ENVIRONMENTS[nextIdx].name}.`);
+        addLog(`שינוי סביבתי: הסביבה כעת היא ${ENVIRONMENTS[nextIdx].name}.`);
         nextStep();
         break;
 
       case GameStep.SELECTION:
-        addLog("סלקציה: הטורף יוצא לציד. הוא מבחין בקלות במי שאינו מוסווה.");
+        addLog("סלקציה: הטורף מחפש חיפושיות שבולטות על הרקע.");
         const currentPop = [...population];
         const candidatesForDeath: number[] = [];
         
@@ -108,12 +110,11 @@ const App: React.FC = () => {
           let survivalProb = 0.5;
           
           if (environment.type === 'LUSH') {
-            survivalProb = gCount === 2 ? 0.98 : gCount === 1 ? 0.3 : 0.02;
+            survivalProb = gCount === 2 ? 0.98 : gCount === 1 ? 0.4 : 0.05;
           } else if (environment.type === 'MEADOW') {
-            // בסביבת שדה בהיר, ההיברידיים (G=1) הם המוסווים ביותר
-            survivalProb = gCount === 1 ? 0.98 : gCount === 2 ? 0.2 : 0.2;
-          } else { // ARID
-            survivalProb = gCount === 0 ? 0.98 : gCount === 1 ? 0.3 : 0.02;
+            survivalProb = gCount === 1 ? 0.98 : 0.2;
+          } else { 
+            survivalProb = gCount === 0 ? 0.98 : gCount === 1 ? 0.4 : 0.05;
           }
           
           if (Math.random() > survivalProb) {
@@ -121,37 +122,40 @@ const App: React.FC = () => {
           }
         });
 
-        // ערבוב ובחירה של עד 12 חיפושיות לטריפה כדי להאיץ את השינוי הדורי
         const shuffledToEat = candidatesForDeath.sort(() => Math.random() - 0.5);
-        const actualEatenIndices = shuffledToEat.slice(0, 12);
+        const actualEatenIndices = shuffledToEat.slice(0, 14);
 
         for (const index of actualEatenIndices) {
           const prey = currentPop[index];
           setPredator({ x: prey.x, y: prey.y, visible: true });
-          await new Promise(r => setTimeout(r, 350));
+          await new Promise(r => setTimeout(r, 300));
           setPopulation(prev => prev.map((p, i) => i === index ? { ...p, isAlive: false } : p));
           await new Promise(r => setTimeout(r, 50));
         }
         
         setPredator({ x: 50, y: -20, visible: false });
-        addLog(`תוצאה: ${actualEatenIndices.length} חיפושיות פחות מותאמות נטרפו.`);
+        addLog(`הטריפה הסתיימה. רק המוסווים ביותר שרדו ברובם.`);
         nextStep();
         break;
 
       case GameStep.INHERITANCE:
         const survivors = population.filter(p => p.isAlive);
-        if (survivors.length === 0) {
-          addLog("הכחדה! כל האוכלוסייה נטרפה. מתחילים מחדש...");
+        if (survivors.length < 2) {
+          addLog("האוכלוסייה קטנה מדי להתרבות! מתחילים מחדש...");
           initializePopulation();
           setStep(GameStep.VARIATION);
         } else {
-          // מילוי האוכלוסייה חזרה ל-20 פרטים על בסיס השורדים (הורשה)
           const nextGen: Individual[] = Array.from({ length: 20 }).map((_, i) => {
-            const parent = survivors[Math.floor(Math.random() * survivors.length)];
+            const parent1 = survivors[Math.floor(Math.random() * survivors.length)];
+            const parent2 = survivors[Math.floor(Math.random() * survivors.length)];
+            const childAllele1 = parent1.alleles[Math.random() > 0.5 ? 0 : 1];
+            const childAllele2 = parent2.alleles[Math.random() > 0.5 ? 0 : 1];
+            const alleles: [Allele, Allele] = [childAllele1, childAllele2];
+            
             return {
               id: `gen${generation + 1}-${i}`,
-              alleles: [...parent.alleles] as [Allele, Allele],
-              color: getIndividualColor(parent.alleles),
+              alleles,
+              color: getIndividualColor(alleles),
               isAlive: true,
               x: 10 + Math.random() * 80,
               y: 10 + Math.random() * 80,
@@ -159,13 +163,13 @@ const App: React.FC = () => {
           });
           setPopulation(nextGen);
           updateStats(nextGen);
-          addLog("תורשה: השורדים התרבו. הצאצאים ירשו את האללים של הוריהם.");
+          addLog("תורשה: השורדים התרבו. הצאצאים ירשו שילוב של אללים מהוריהם.");
           nextStep();
         }
         break;
 
       case GameStep.POPULATION_CHANGE:
-        addLog(`סיכום: דור ${generation} הסתיים. שים לב לשינוי בתדירות המופעים.`);
+        addLog(`דור ${generation} הושלם. בדוק את השינוי בגרף התכונות.`);
         setGeneration(prev => prev + 1);
         nextStep();
         break;
@@ -187,14 +191,83 @@ const App: React.FC = () => {
   };
 
   const getChartData = () => [
-    { name: 'ירוק (GG)', value: stats.green, color: '#166534' },
-    { name: 'מעורב (GB)', value: stats.hybrid, color: '#a3e635' },
+    { name: 'ירוק כהה (GG)', value: stats.green, color: '#166534' },
+    { name: 'ירוק בהיר (GB)', value: stats.hybrid, color: '#a3e635' },
     { name: 'חום (BB)', value: stats.brown, color: '#78350f' }
   ];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 p-2 md:p-6 flex flex-col font-sans overflow-hidden">
-      <header className="max-w-6xl w-full mx-auto flex justify-between items-center bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-2xl mb-4">
+      {/* Quiz Overlay - Improved for visibility and accessibility */}
+      {step === GameStep.QUIZ && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 md:p-8 overflow-y-auto">
+          <div className="max-w-2xl w-full bg-slate-900 border border-slate-700 rounded-[2rem] shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden animate-slideUp">
+            <div className="bg-indigo-600 p-6 flex flex-col items-center justify-center text-white relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-12 bg-white/5 rounded-full -mr-12 -mt-12"></div>
+              <Zap size={40} className="mb-2 relative z-10" />
+              <h2 className="text-2xl font-black relative z-10 uppercase tracking-widest">בקרת הבנה</h2>
+            </div>
+            
+            <div className="p-6 md:p-10 space-y-8">
+              <div className="space-y-4">
+                <p className="text-xl md:text-2xl font-bold text-slate-100 text-center leading-relaxed">
+                  {QUIZ_QUESTIONS[quizIndex].question}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                {QUIZ_QUESTIONS[quizIndex].options.map((opt, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleQuizAnswer(i)}
+                    disabled={quizAnswered !== null}
+                    className={`w-full p-5 text-right rounded-2xl border-2 transition-all duration-300 text-base font-bold shadow-sm flex items-center justify-between gap-4 ${
+                      quizAnswered === null 
+                        ? 'border-slate-800 bg-slate-800/50 hover:border-indigo-500 hover:bg-slate-800' 
+                        : i === QUIZ_QUESTIONS[quizIndex].correctIndex 
+                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 scale-[1.02]'
+                          : quizAnswered === i 
+                            ? 'bg-rose-500/20 border-rose-500 text-rose-300'
+                            : 'opacity-40 border-slate-900'
+                    }`}
+                  >
+                    <span className="flex-1">{opt}</span>
+                    {quizAnswered !== null && i === QUIZ_QUESTIONS[quizIndex].correctIndex && (
+                       <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+                         <ChevronRight className="text-white w-4 h-4 rotate-180" />
+                       </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {quizAnswered !== null && (
+                <div className="bg-slate-800/50 rounded-2xl border border-slate-700 p-6 animate-fadeIn">
+                  <div className="flex items-start gap-3 mb-6">
+                    <div className={`p-2 rounded-lg shrink-0 ${quizAnswered === QUIZ_QUESTIONS[quizIndex].correctIndex ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                      <Search size={20} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black uppercase tracking-wider text-slate-400 mb-1">הסבר מדעי</h4>
+                      <p className="text-slate-200 font-medium leading-relaxed italic">
+                        {QUIZ_QUESTIONS[quizIndex].explanation}
+                      </p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={finishQuiz}
+                    className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black transition-all shadow-xl text-xl flex items-center justify-center gap-3 active:scale-95"
+                  >
+                    המשך לסימולציה <ChevronRight size={24} />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <header className="max-w-6xl w-full mx-auto flex justify-between items-center bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-2xl mb-4 shrink-0">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20 text-indigo-400">
             <Activity size={24} />
@@ -231,7 +304,7 @@ const App: React.FC = () => {
             </div>
           </section>
 
-          <section className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+          <section className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shrink-0">
             <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-wider mb-3">פרמטר סביבה</h3>
             <div className="p-3 bg-slate-800 rounded-xl border border-slate-700">
               <p className="text-xs font-bold text-white mb-1">{environment.name}</p>
@@ -255,52 +328,9 @@ const App: React.FC = () => {
               {population.map(ind => (
                 <BeetleComponent key={ind.id} individual={ind} />
               ))}
-
-              {step === GameStep.QUIZ && (
-                <div className="absolute inset-0 bg-slate-950/95 flex items-center justify-center p-4 z-40 animate-fadeIn">
-                  <div className="max-w-md w-full">
-                    <div className="flex justify-center mb-6 text-indigo-400">
-                       <Zap size={32} />
-                    </div>
-                    <h2 className="text-xl font-black mb-2 text-center text-white">בקרת הבנה</h2>
-                    <p className="text-sm text-slate-400 text-center mb-8">{QUIZ_QUESTIONS[quizIndex].question}</p>
-                    <div className="space-y-3">
-                      {QUIZ_QUESTIONS[quizIndex].options.map((opt, i) => (
-                        <button
-                          key={i}
-                          onClick={() => handleQuizAnswer(i)}
-                          disabled={quizAnswered !== null}
-                          className={`w-full p-4 text-right rounded-xl border-2 transition-all text-sm font-bold ${
-                            quizAnswered === null 
-                              ? 'border-slate-800 bg-slate-900 hover:border-indigo-500' 
-                              : i === QUIZ_QUESTIONS[quizIndex].correctIndex 
-                                ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
-                                : quizAnswered === i 
-                                  ? 'bg-rose-500/20 border-rose-500 text-rose-300'
-                                  : 'opacity-30 border-slate-900'
-                          }`}
-                        >
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                    {quizAnswered !== null && (
-                      <div className="mt-8 p-4 bg-slate-900 rounded-xl border border-slate-800 animate-slideUp">
-                        <p className="text-xs text-slate-300 leading-relaxed mb-4 italic">{QUIZ_QUESTIONS[quizIndex].explanation}</p>
-                        <button 
-                          onClick={finishQuiz}
-                          className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black transition-all shadow-lg"
-                        >
-                          המשך לדור הבא
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
 
-            <div className="p-4 bg-slate-900/50 border-t border-slate-800">
+            <div className="p-4 bg-slate-900/50 border-t border-slate-800 shrink-0">
               <button 
                 onClick={handleStepAction}
                 disabled={step === GameStep.QUIZ || isProcessing}
@@ -326,12 +356,12 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div className="lg:col-span-1 flex flex-col gap-4">
-          <section className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex-1 flex flex-col">
+        <div className="lg:col-span-1 flex flex-col gap-4 overflow-hidden">
+          <section className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex-1 flex flex-col overflow-hidden">
             <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-wider mb-6 flex items-center gap-2">
               <BarChart3 size={14} /> הרכב תכונות באוכלוסייה
             </h3>
-            <div className="flex-1 min-h-[300px] w-full relative">
+            <div className="flex-1 min-h-0 w-full relative">
               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <BarChart data={getChartData()} margin={{ top: 0, right: 0, left: -30, bottom: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
@@ -351,7 +381,7 @@ const App: React.FC = () => {
             </div>
           </section>
 
-          <div className="bg-indigo-500/5 border border-indigo-500/10 p-4 rounded-2xl flex items-start gap-3">
+          <div className="bg-indigo-500/5 border border-indigo-500/10 p-4 rounded-2xl flex items-start gap-3 shrink-0">
              <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400 shrink-0">
                <Dna size={14} />
              </div>
@@ -367,9 +397,9 @@ const App: React.FC = () => {
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
-        .animate-slideUp { animation: slideUp 0.4s ease-out; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-fadeIn { animation: fadeIn 0.4s ease-out; }
+        .animate-slideUp { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
       `}</style>
     </div>
   );
